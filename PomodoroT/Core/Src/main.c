@@ -22,7 +22,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include "stm32l476g_discovery_glass_lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,6 +49,8 @@ LCD_HandleTypeDef hlcd;
 
 QSPI_HandleTypeDef hqspi;
 
+RTC_HandleTypeDef hrtc;
+
 SAI_HandleTypeDef hsai_BlockA1;
 SAI_HandleTypeDef hsai_BlockB1;
 
@@ -70,6 +73,7 @@ static void MX_QUADSPI_Init(void);
 static void MX_SAI1_Init(void);
 static void MX_SPI2_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_RTC_Init(void);
 void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
@@ -78,6 +82,8 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+const char *options[] = {"READY", "30secs", "10mins", "20mins", "30mins"};
+int optionIndex = 0;
 
 /* USER CODE END 0 */
 
@@ -121,8 +127,9 @@ int main(void)
   MX_SPI2_Init();
   MX_USART2_UART_Init();
   MX_USB_HOST_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
-
+  BSP_LCD_GLASS_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -131,12 +138,43 @@ int main(void)
   {
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
+
     /* USER CODE BEGIN 3 */
 
     //Timer is off, Program is running
     HAL_GPIO_WritePin(LD_R_GPIO_Port,LD_R_Pin,GPIO_PIN_SET);
 
-    //Display Ready on LCD'
+    //Display Ready on LCD
+    BSP_LCD_GLASS_DisplayString((uint8_t *)options[optionIndex]);
+
+
+    //check for joystick right button press and change value
+    if(HAL_GPIO_ReadPin(JOY_RIGHT_GPIO_Port,JOY_RIGHT_Pin)){
+    	if(optionIndex == 4 ){
+    		optionIndex = 1;
+    	} else{
+    		optionIndex++;
+    	}
+    	HAL_Delay(1000);
+    }
+
+    //check for joystick button left press and change value
+    if(HAL_GPIO_ReadPin(JOY_LEFT_GPIO_Port,JOY_LEFT_Pin)){
+        	if(optionIndex != 0 ){
+        		optionIndex--;
+        	}
+        	HAL_Delay(1000);
+     }
+
+    //check if center joystick button was pressed
+    if(HAL_GPIO_ReadPin(JOY_CENTER_GPIO_Port,JOY_CENTER_Pin) && optionIndex != 0){
+    	displayTimer(optionIndex);
+    }
+
+
+
+
+
 
   }
   /* USER CODE END 3 */
@@ -246,7 +284,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x00404C74;
+  hi2c1.Init.Timing = 0x00604E6E;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -294,7 +332,7 @@ static void MX_I2C2_Init(void)
 
   /* USER CODE END I2C2_Init 1 */
   hi2c2.Instance = I2C2;
-  hi2c2.Init.Timing = 0x00404C74;
+  hi2c2.Init.Timing = 0x00604E6E;
   hi2c2.Init.OwnAddress1 = 0;
   hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -394,6 +432,70 @@ static void MX_QUADSPI_Init(void)
   /* USER CODE BEGIN QUADSPI_Init 2 */
 
   /* USER CODE END QUADSPI_Init 2 */
+
+}
+
+/**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  RTC_TimeTypeDef sTime = {0};
+  RTC_DateTypeDef sDate = {0};
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* USER CODE BEGIN Check_RTC_BKUP */
+
+  /* USER CODE END Check_RTC_BKUP */
+
+  /** Initialize RTC and set the Time and Date
+  */
+  sTime.Hours = 0x0;
+  sTime.Minutes = 0x0;
+  sTime.Seconds = 0x0;
+  sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+  sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sDate.WeekDay = RTC_WEEKDAY_MONDAY;
+  sDate.Month = RTC_MONTH_JANUARY;
+  sDate.Date = 0x1;
+  sDate.Year = 0x0;
+
+  if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
 
 }
 
@@ -679,7 +781,56 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void displayTimer(int time)
+{
+  RTC_TimeTypeDef readTime;
+  RTC_DateTypeDef readDate;
+  HAL_GPIO_WritePin(LD_R_GPIO_Port,LD_R_Pin,GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LD_G_GPIO_Port,LD_G_Pin,GPIO_PIN_SET);
 
+  char bufSec[2];
+  char bufMin[2];
+
+  while(1){
+	    MX_USB_HOST_Process();
+
+
+	    HAL_RTC_GetTime(&hrtc, &readTime, RTC_FORMAT_BIN);
+	    HAL_RTC_GetDate(&hrtc, &readDate, RTC_FORMAT_BIN);
+
+	    itoa(readTime.Seconds,bufSec,10);
+	    itoa(readTime.Minutes,bufMin,10);
+
+	    if(readTime.Seconds == 0){
+	  	   BSP_LCD_GLASS_Clear();
+	    }else if(readTime.Seconds == 30 && time == 1 ){
+	    	return;
+	    }
+
+	    if(readTime.Minutes == 0){
+	  	   BSP_LCD_GLASS_Clear();
+	    }else if(time == 2 && readTime.Minutes == 10){
+	    	return;
+	    } else if(time == 3 && readTime.Minutes == 20){
+	    	return;
+	    } else if(time == 3 && readTime.Minutes == 30){
+	    	return;
+	    }
+
+	    BSP_LCD_GLASS_DisplayChar((uint8_t *)&bufMin[0], POINT_OFF, DOUBLEPOINT_OFF, 2);
+	    BSP_LCD_GLASS_DisplayChar((uint8_t *)&bufMin[1], POINT_OFF, DOUBLEPOINT_ON, 3);
+	    BSP_LCD_GLASS_DisplayChar((uint8_t *)&bufSec[0], POINT_OFF, DOUBLEPOINT_OFF, 4);
+	    BSP_LCD_GLASS_DisplayChar((uint8_t *)&bufSec[1], POINT_OFF, DOUBLEPOINT_OFF, 5);
+
+
+	    if(HAL_GPIO_ReadPin(JOY_CENTER_GPIO_Port,JOY_CENTER_Pin)){
+	       	return;
+	    }
+
+  }
+
+
+}
 /* USER CODE END 4 */
 
 /**
